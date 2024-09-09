@@ -1,3 +1,5 @@
 *.c
 c_sender/test_sender
 .vscode
+# Allow all C source files
+!c_sender/*.c
