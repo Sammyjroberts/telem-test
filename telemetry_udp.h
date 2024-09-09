@@ -20,6 +20,6 @@ void create_telemetry_packet(TelemetryPacket *packet);
 
 // Function to send a telemetry packet over UDP
 int send_telemetry_packet(const TelemetryPacket *packet, const char *ip, uint16_t port);
-int send_fragment(const uint8_t *payload, size_t offset, size_t length, uint16_t sequence_number, const char *ip, uint16_t port, int is_last, int total_fragments);
+int send_fragment(const uint8_t *payload, int packetID, size_t offset, size_t length, uint16_t sequence_number, const char *ip, uint16_t port, int is_last, int total_fragments);
 
 #endif // TELEMETRY_UDP_H

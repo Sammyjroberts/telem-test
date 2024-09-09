@@ -7,14 +7,6 @@
 
 const char DELIMITER[4] = "|||"; // Includes null terminator
 
-// Function to create a sample telemetry packet
-void create_telemetry_packet(TelemetryPacket *packet)
-{
-  packet->packet_id = htons(0x1234); // Example packet ID
-  packet->packet_length = htons(sizeof(TelemetryPacket) - sizeof(uint16_t) - sizeof(uint16_t));
-  memset(packet->payload, 0xAB, sizeof(packet->payload)); // Example payload data
-}
-
 // Function to send a telemetry packet over UDP
 int send_telemetry_packet(const TelemetryPacket *packet, const char *ip, uint16_t port)
 {
@@ -51,10 +43,10 @@ int send_telemetry_packet(const TelemetryPacket *packet, const char *ip, uint16_
   return 0;
 }
 
-int send_fragment(const uint8_t *payload, size_t offset, size_t length, uint16_t sequence_number, const char *ip, uint16_t port, int is_last, int total_fragments)
+int send_fragment(const uint8_t *payload, int packetID, size_t offset, size_t length, uint16_t sequence_number, const char *ip, uint16_t port, int is_last, int total_fragments)
 {
   TelemetryPacket fragment;
-  fragment.packet_id = htons(0x1234);                // Example packet ID for fragments
+  fragment.packet_id = htons(packetID);              // Example packet ID for fragments
   fragment.packet_length = htons(length);            // Length of the fragment
   fragment.sequence_number = htons(sequence_number); // Set the sequence number
   fragment.fragment_total = htons(total_fragments);  // Set the total number of fragments

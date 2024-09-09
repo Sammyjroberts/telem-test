@@ -16,6 +16,8 @@ import (
 	"strings"
 	"sync"
 	"unsafe"
+
+	"github.com/davecgh/go-spew/spew"
 )
 
 type Fragment struct {
@@ -27,10 +29,9 @@ type Fragment struct {
 }
 
 var (
-	fragmentsMap    = make(map[int]map[int]Fragment) // Store fragments by sequence number
-	mu              sync.Mutex                       // Mutex for synchronizing access to fragmentsMap
-	receivedPackets = 0                              // Count of received unique fragments
-	delimiter       = "|||"                          // Delimiter to mark the end of the message
+	fragmentsMap = make(map[int]map[int]Fragment) // Store fragments by sequence number
+	mu           sync.Mutex                       // Mutex for synchronizing access to fragmentsMap
+	delimiter    = "|||"                          // Delimiter to mark the end of the message
 )
 
 func handleTelemetryPacket(data []byte) (Fragment, bool) {
@@ -40,7 +41,7 @@ func handleTelemetryPacket(data []byte) (Fragment, bool) {
 	}
 
 	packet := (*C.TelemetryPacket)(unsafe.Pointer(&data[0]))
-	packetID := C.ntohs(packet.packet_id)
+	packetID := int(C.ntohs(packet.packet_id))
 	packetLength := C.ntohs(packet.packet_length)
 	sequenceNumber := C.ntohs(packet.sequence_number)
 	totalFragments := C.ntohs(packet.fragment_total)
@@ -89,8 +90,7 @@ func reassembleAndPrintMessage(packetID int) {
 	fmt.Printf("Reassembled Full Message: [%s]\n", fullMessage)
 
 	// Clear the fragments map and reset counters for the next set of fragments
-	fragmentsMap[packetID] = make(map[int]Fragment)
-	receivedPackets = 0
+	delete(fragmentsMap, packetID)
 }
 
 func main() {
@@ -132,13 +132,13 @@ func main() {
 
 		if _, exists := fragmentsMap[fragment.packetID][fragment.sequenceNumber]; !exists {
 			fragmentsMap[fragment.packetID][fragment.sequenceNumber] = fragment
-			receivedPackets++
 		}
 		mu.Unlock()
 		receivedCount := len(fragmentsMap[fragment.packetID])
 		// Check if all expected fragments are received
 		if receivedCount == fragment.totalFragments {
 			fmt.Println("All fragments received. Reassembling full message...")
+			spew.Dump(fragmentsMap[fragment.packetID])
 			reassembleAndPrintMessage(fragment.packetID)
 		}
 	}
