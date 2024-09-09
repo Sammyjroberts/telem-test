@@ -23,13 +23,14 @@ type Fragment struct {
 	payload        string
 	length         int
 	totalFragments int
+	packetID       int
 }
 
 var (
-	fragmentsMap    = make(map[int]Fragment) // Store fragments by sequence number
-	mu              sync.Mutex               // Mutex for synchronizing access to fragmentsMap
-	receivedPackets = 0                      // Count of received unique fragments
-	delimiter       = "|||"                  // Delimiter to mark the end of the message
+	fragmentsMap    = make(map[int]map[int]Fragment) // Store fragments by sequence number
+	mu              sync.Mutex                       // Mutex for synchronizing access to fragmentsMap
+	receivedPackets = 0                              // Count of received unique fragments
+	delimiter       = "|||"                          // Delimiter to mark the end of the message
 )
 
 func handleTelemetryPacket(data []byte) (Fragment, bool) {
@@ -55,31 +56,31 @@ func handleTelemetryPacket(data []byte) (Fragment, bool) {
 	fmt.Printf("Packet Length: %d bytes\n", packetLength)
 	fmt.Printf("Payload Fragment: [%s]\n", payloadStr) // Print the fragment
 
-	return Fragment{sequenceNumber: int(sequenceNumber), payload: payloadStr, length: int(packetLength), totalFragments: int(totalFragments)}, true
+	return Fragment{sequenceNumber: int(sequenceNumber), payload: payloadStr, length: int(packetLength), totalFragments: int(totalFragments), packetID: int(packetID)}, true
 }
 
-func reassembleAndPrintMessage() {
+func reassembleAndPrintMessage(packetID int) {
 	// Lock and sort the fragments by sequence number
 	mu.Lock()
 	defer mu.Unlock()
 
 	// Sort keys of the map (sequence numbers)
-	sequenceNumbers := make([]int, 0, len(fragmentsMap))
-	for seq := range fragmentsMap {
+	sequenceNumbers := make([]int, 0, len(fragmentsMap[packetID]))
+	for seq := range fragmentsMap[packetID] {
 		sequenceNumbers = append(sequenceNumbers, seq)
 	}
 	sort.Ints(sequenceNumbers)
 
 	// Print map contents for debugging
 	for _, seq := range sequenceNumbers {
-		fmt.Printf("Sequence: %d, Payload: [%s]\n", seq, fragmentsMap[seq].payload)
-		fmt.Printf("Length: %d\n", fragmentsMap[seq].length)
+		fmt.Printf("Sequence: %d, Payload: [%s]\n", seq, fragmentsMap[packetID][seq].payload)
+		fmt.Printf("Length: %d\n", fragmentsMap[packetID][seq].length)
 	}
 
 	// Combine fragments in the correct order
 	var messageBuilder strings.Builder
 	for _, seq := range sequenceNumbers {
-		messageBuilder.WriteString(fragmentsMap[seq].payload)
+		messageBuilder.WriteString(fragmentsMap[packetID][seq].payload)
 	}
 
 	fullMessage := strings.TrimSuffix(messageBuilder.String(), delimiter)
@@ -88,7 +89,7 @@ func reassembleAndPrintMessage() {
 	fmt.Printf("Reassembled Full Message: [%s]\n", fullMessage)
 
 	// Clear the fragments map and reset counters for the next set of fragments
-	fragmentsMap = make(map[int]Fragment)
+	fragmentsMap[packetID] = make(map[int]Fragment)
 	receivedPackets = 0
 }
 
@@ -125,8 +126,12 @@ func main() {
 
 		// Lock and store the fragment in the map using its sequence number
 		mu.Lock()
-		if _, exists := fragmentsMap[fragment.sequenceNumber]; !exists {
-			fragmentsMap[fragment.sequenceNumber] = fragment
+		if _, exists := fragmentsMap[fragment.packetID]; !exists {
+			fragmentsMap[fragment.packetID] = make(map[int]Fragment) // Initialize the inner map if it doesn't exist
+		}
+
+		if _, exists := fragmentsMap[fragment.packetID][fragment.sequenceNumber]; !exists {
+			fragmentsMap[fragment.packetID][fragment.sequenceNumber] = fragment
 			receivedPackets++
 		}
 		mu.Unlock()
@@ -134,7 +139,7 @@ func main() {
 		// Check if all expected fragments are received
 		if receivedPackets == fragment.totalFragments {
 			fmt.Println("All fragments received. Reassembling full message...")
-			reassembleAndPrintMessage()
+			reassembleAndPrintMessage(fragment.packetID)
 		}
 	}
 }
