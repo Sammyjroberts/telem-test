@@ -135,9 +135,9 @@ func main() {
 			receivedPackets++
 		}
 		mu.Unlock()
-
+		receivedCount := len(fragmentsMap[fragment.packetID])
 		// Check if all expected fragments are received
-		if receivedPackets == fragment.totalFragments {
+		if receivedCount == fragment.totalFragments {
 			fmt.Println("All fragments received. Reassembling full message...")
 			reassembleAndPrintMessage(fragment.packetID)
 		}
