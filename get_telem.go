@@ -22,14 +22,14 @@ type Fragment struct {
 	sequenceNumber int
 	payload        string
 	length         int
+	totalFragments int
 }
 
 var (
-	fragmentsMap  = make(map[int]Fragment) // Store fragments by sequence number
-	mu            sync.Mutex               // Mutex for synchronizing access to fragmentsMap
-	expectedBytes = 0                      // Bytes expected for complete message
-	receivedBytes = 0                      // Bytes received so far
-	delimiter     = "|||"                  // Delimiter to mark the end of the message
+	fragmentsMap    = make(map[int]Fragment) // Store fragments by sequence number
+	mu              sync.Mutex               // Mutex for synchronizing access to fragmentsMap
+	receivedPackets = 0                      // Count of received unique fragments
+	delimiter       = "|||"                  // Delimiter to mark the end of the message
 )
 
 func handleTelemetryPacket(data []byte) (Fragment, bool) {
@@ -42,6 +42,7 @@ func handleTelemetryPacket(data []byte) (Fragment, bool) {
 	packetID := C.ntohs(packet.packet_id)
 	packetLength := C.ntohs(packet.packet_length)
 	sequenceNumber := C.ntohs(packet.sequence_number)
+	totalFragments := C.ntohs(packet.fragment_total)
 
 	// Extract the payload from the packet as a byte slice
 	payload := C.GoBytes(unsafe.Pointer(&packet.payload), C.int(packetLength))
@@ -50,11 +51,11 @@ func handleTelemetryPacket(data []byte) (Fragment, bool) {
 	payloadStr := string(payload)
 
 	// Log details of the packet
-	fmt.Printf("Received Packet ID: 0x%04X, Sequence: %d\n", packetID, sequenceNumber)
+	fmt.Printf("Received Packet ID: 0x%04X, Sequence: %d, Total Fragments: %d\n", packetID, sequenceNumber, totalFragments)
 	fmt.Printf("Packet Length: %d bytes\n", packetLength)
-	fmt.Printf("Payload Fragment: %s\n", payloadStr) // Print the fragment
+	fmt.Printf("Payload Fragment: [%s]\n", payloadStr) // Print the fragment
 
-	return Fragment{sequenceNumber: int(sequenceNumber), payload: payloadStr, length: int(packetLength)}, true
+	return Fragment{sequenceNumber: int(sequenceNumber), payload: payloadStr, length: int(packetLength), totalFragments: int(totalFragments)}, true
 }
 
 func reassembleAndPrintMessage() {
@@ -68,30 +69,27 @@ func reassembleAndPrintMessage() {
 		sequenceNumbers = append(sequenceNumbers, seq)
 	}
 	sort.Ints(sequenceNumbers)
-	// print map
+
+	// Print map contents for debugging
 	for _, seq := range sequenceNumbers {
 		fmt.Printf("Sequence: %d, Payload: [%s]\n", seq, fragmentsMap[seq].payload)
 		fmt.Printf("Length: %d\n", fragmentsMap[seq].length)
 	}
+
 	// Combine fragments in the correct order
 	var messageBuilder strings.Builder
-	s := ""
 	for _, seq := range sequenceNumbers {
-		s += fragmentsMap[seq].payload
 		messageBuilder.WriteString(fragmentsMap[seq].payload)
 	}
-	fmt.Println("s: ", s)
-	fmt.Println("Message Builder: ", messageBuilder.String())
 
 	fullMessage := strings.TrimSuffix(messageBuilder.String(), delimiter)
 
 	// Output the reassembled full message
-	fmt.Printf("Reassembled Full Message: %s\n", fullMessage)
+	fmt.Printf("Reassembled Full Message: [%s]\n", fullMessage)
 
 	// Clear the fragments map and reset counters for the next set of fragments
 	fragmentsMap = make(map[int]Fragment)
-	receivedBytes = 0
-	expectedBytes = 0
+	receivedPackets = 0
 }
 
 func main() {
@@ -127,17 +125,14 @@ func main() {
 
 		// Lock and store the fragment in the map using its sequence number
 		mu.Lock()
-		fragmentsMap[fragment.sequenceNumber] = fragment
-		receivedBytes += fragment.length
-
-		// Check if the fragment contains the delimiter to detect the last fragment
-		if strings.Contains(fragment.payload, delimiter) {
-			expectedBytes = receivedBytes // Mark that the received bytes should match to finish
+		if _, exists := fragmentsMap[fragment.sequenceNumber]; !exists {
+			fragmentsMap[fragment.sequenceNumber] = fragment
+			receivedPackets++
 		}
 		mu.Unlock()
 
-		// Reassemble when all expected bytes are received
-		if expectedBytes > 0 && receivedBytes >= expectedBytes {
+		// Check if all expected fragments are received
+		if receivedPackets == fragment.totalFragments {
 			fmt.Println("All fragments received. Reassembling full message...")
 			reassembleAndPrintMessage()
 		}

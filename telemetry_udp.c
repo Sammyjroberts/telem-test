@@ -51,13 +51,13 @@ int send_telemetry_packet(const TelemetryPacket *packet, const char *ip, uint16_
   return 0;
 }
 
-int send_fragment(const uint8_t *payload, size_t offset, size_t length, uint16_t sequence_number, const char *ip, uint16_t port, int is_last)
+int send_fragment(const uint8_t *payload, size_t offset, size_t length, uint16_t sequence_number, const char *ip, uint16_t port, int is_last, int total_fragments)
 {
   TelemetryPacket fragment;
   fragment.packet_id = htons(0x1234);                // Example packet ID for fragments
   fragment.packet_length = htons(length);            // Length of the fragment
   fragment.sequence_number = htons(sequence_number); // Set the sequence number
-
+  fragment.fragment_total = htons(total_fragments);  // Set the total number of fragments
   // Copy only the relevant fragment payload from the specified offset
   memcpy(fragment.payload, payload + offset, length); // Copy only the required fragment without padding
 

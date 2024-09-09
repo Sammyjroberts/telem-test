@@ -23,19 +23,19 @@ int main()
 
   // Send three fragments, ensuring each only sends the relevant part of the payload
   // Fragment 1: "hel"
-  if (send_fragment(packet.payload, 0, fragment_size, 1, ip, port, 0) != 0) // Sequence 1
-  {
-    return -1;
-  }
-
-  // Fragment 2: "lo "
-  if (send_fragment(packet.payload, fragment_size, fragment_size, 2, ip, port, 0) != 0) // Sequence 2
+  if (send_fragment(packet.payload, 0, fragment_size, 1, ip, port, 0, 3) != 0) // Sequence 1
   {
     return -1;
   }
 
   // Fragment 3: "world"
-  if (send_fragment(packet.payload, 2 * fragment_size, total_length - 2 * fragment_size, 3, ip, port, 1) != 0) // Sequence 3, last fragment
+  if (send_fragment(packet.payload, 2 * fragment_size, total_length - 2 * fragment_size, 3, ip, port, 1, 3) != 0) // Sequence 3, last fragment
+  {
+    return -1;
+  }
+
+  // Fragment 2: "lo "
+  if (send_fragment(packet.payload, fragment_size, fragment_size, 2, ip, port, 0, 3) != 0) // Sequence 2
   {
     return -1;
   }
